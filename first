@@ -1,1 +1,183 @@
-start
+def POST_BUILD = [:]
+def TRACE = [:]
+
+POST_BUILD['Merge Calibrationfiles'] = {
+    stage('Merge Calibrationfiles') {
+        echo 'Merge Calibrationfiles started'
+        sleep 5
+        echo 'Merge Calibrationfiles failing now'
+        error('Merge Calibrationfiles failed')
+    }
+}
+
+POST_BUILD['SemanticCA Astree'] = {
+    stage('SemanticCA Astree') {
+        echo 'SemanticCA Astree started'
+        sleep 30
+        echo 'SemanticCA Astree finished (YOU SHOULD NOT SEE THIS)'
+    }
+}
+
+
+TRACE['Trace32 OTT test'] = {
+    stage('Trace32 OTT test') {
+        echo 'Trace32 OTT test'
+    }
+}
+
+TRACE['Trace32 flash and Canoe test'] = {
+    stage('Trace32 flash and Canoe test') {
+        echo 'Trace32 flash and Canoe test'
+    }
+}
+
+
+pipeline {
+    agent any
+    options {
+        timestamps()
+        parallelsAlwaysFailFast() 
+       
+   }
+
+    stages {
+
+        stage('preparation for RC creation') {
+            steps {
+                echo 'preparation for RC creation'
+            }
+        }
+
+        stage('Prep References') {
+            steps {
+                echo 'Prep References'
+            }
+        }
+
+        stage('Detect changes in UT') {
+            steps {
+                echo 'Detect changes in UT'
+            }
+        }
+
+        stage('Parallel Stage 1') {
+            failFast true
+            parallel {
+
+                stage('GIT HASH and SDD') {
+                    stages {
+                        stage('GIT HASH') {
+                            steps {
+                                echo 'GIT HASH'
+                            }
+                        }
+                        stage('SDD code validation') {
+                            steps {
+                                echo 'SDD code validation'
+                            }
+                        }
+                    }
+                }
+
+                stage('ASTREE') {
+                    stages {
+                        stage('SCA MISRA') {
+                            steps {
+                                echo 'SCA MISRA'
+                            }
+                        }
+                        stage('SCA ATTiny') {
+                            steps {
+                                echo 'SCA ATTiny'
+                            }
+                        }
+                    }
+                }
+
+                stage('Build ATTiny') {
+                    steps {
+                        echo 'Build ATTiny'
+                    }
+                }
+
+                stage('Unittest ATTiny') {
+                    steps {
+                        echo 'Unittest ATTiny'
+                    }
+                }
+
+                stage('MemMap Check') {
+                    steps {
+                        echo 'MemMap Check'
+                    }
+                }
+
+                stage('Tresos Generation') {
+                    steps {
+                        echo 'Tresos Generation'
+                    }
+                }
+
+                stage('Check code format') {
+                    steps {
+                        echo 'Check code format'
+                    }
+                }
+
+                stage('Intg Test: Customer build') {
+                    steps {
+                        echo 'Intg Test: Customer build'
+                    }
+                }
+
+                stage('main Target') {
+                    stages {
+
+                        stage('Build libs') {
+                            steps {
+                                echo 'Build libs'
+                            }
+                        }
+
+                        stage('Generate A2L') {
+                            steps {
+                                echo 'Generate A2L'
+                            }
+                        }
+
+                        stage('Merge Calib and Semantic CA') {
+                            steps {
+                                script {
+                                    parallel POST_BUILD + [failFast: true]
+
+                                }
+                            }
+                        }
+
+                        stage('Trace32 OTT and Canoe Test') {
+                            steps {
+                                script {
+                                    parallel TRACE + [failFast: true]
+                                }
+                            }
+                        }
+
+                    }
+                }
+
+                stage('mcs build') {
+                    steps {
+                        sleep time: 15, unit: 'SECONDS'
+                        echo 'mcs build'
+                    }
+                }
+            }
+        }
+        
+    }
+    post {
+        always {
+            echo 'Post actions: always runs'
+        }
+    }
+}
