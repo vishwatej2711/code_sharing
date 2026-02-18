@@ -1,0 +1,1095 @@
+stages
+    {
+        stage ('preparation for RC creation')
+        {
+            agent
+            {
+                label 'AMG-HPEDU-GENERIC'
+            }
+            when
+            {
+                beforeAgent true
+                beforeOptions true
+                anyOf{
+                    expression { isScheduledRC() }
+                    environment name: 'RELEASECANDIDATE', value: "true"
+                }
+            }
+            options
+            {
+                lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-GENERIC', priority: PIPELINE_PRIORITY)
+            }
+            steps
+            {
+                script{
+                    if(isScheduledRC())
+                    {
+                        fetchCurrentRC(PIPELINE_PRIORITY)
+                    }
+                }
+                handleRcParams()
+                checkParameter()
+                processgittagRC(PIPELINE_PRIORITY)
+                processSwName(PIPELINE_PRIORITY)
+            }
+            post
+            {
+                always
+                {
+                    cleanWs deleteDirs: true, disableDeferredWipeout: true, notFailBuild: true
+                }
+            }
+        }
+        stage ('Prep References')
+        {
+            agent
+            {
+                label 'AMG-HPEDU-GENERIC'
+            }
+            options
+            {
+                lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-GENERIC', priority: PIPELINE_PRIORITY)
+            }
+            steps
+            {
+                discoverReferenceBuild referenceJob: 'Mechatronics_Platform/AMG-HPEDU/amg-hpedu-build/main'
+            }
+        }
+        stage('Detect changes in UT') {
+            agent
+            {
+                label 'AMG-HPEDU-GENERIC'
+            }
+            options
+            {
+                lock(resource: null, quantity: 1, label: 'AMG-HPEDU-GENERIC', priority: PIPELINE_PRIORITY)
+            }
+            when
+            {
+                beforeAgent true
+                beforeOptions true
+                allOf
+                {
+                    expression { return !(params.RELEASECANDIDATE) && !isScheduledRC() }
+                    expression { return !(env.BRANCH_NAME =~ 'main*|MNT_REL-*') }
+                }
+            }
+            steps {
+                script {
+                    jenkinsOps.printAgentWSInfo()
+                    ONLY_RUN_UT = jenkinsOps.onlyRunUnitTestStage(PIPELINE_PRIORITY)
+                    echo "ONLY_RUN_UT (Skip Parallel Stage 1): ${ONLY_RUN_UT}"
+                    if( isPR() ) {
+                        env.ATTINY_CHANGED = getChangedATTinyFiles()
+                    }
+                    checkTestVectorFormat()
+                }
+            }
+        }
+        stage ('Parallel Stage 1')
+        {
+            when
+            {
+                beforeAgent true
+                beforeOptions true
+                expression { ONLY_RUN_UT == false }
+            }
+            failFast true
+            parallel
+            {
+                stage ('GIT HASH and SDD')
+                {
+                    stages
+                    {
+                        stage ('GIT HASH')
+                        {
+                            agent
+                            {
+                                label 'AMG-HPEDU-GENERIC'
+                            }
+                            options
+                            {
+                                lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-GENERIC', priority: PIPELINE_PRIORITY)
+                            }
+                            steps
+                            {
+                                determinateCommitHASH(PIPELINE_PRIORITY)
+                            }
+                        }
+                        stage('SDD code validation')
+                        {
+                            agent
+                            {
+                                label 'AMG-HPEDU-GENERIC'
+                            }
+                            options
+                            {
+                                lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-GENERIC', priority: PIPELINE_PRIORITY)
+                            }
+                            steps
+                            {
+                                processSDDCODEVALIDATION(PIPELINE_PRIORITY)
+                            }
+                            post
+                            {
+                                always
+                                {
+                                    postSDDCODEVALIDATION()
+                                }
+                            }
+                        }
+                    }
+                }
+            //     stage ('ASTREE')
+            //     {
+            //         agent
+            //         {
+            //             label 'AMG-HPEDU-ASTREE'
+            //         }
+            //         options
+            //         {
+            //             lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-ASTREE', priority: PIPELINE_PRIORITY)
+            //         }
+            //         steps
+            //         {
+		    //  script
+		    //  {
+            //             astree.processSCA(PIPELINE_PRIORITY)
+            //             astree.processSCA_ATTiny(PIPELINE_PRIORITY)
+		    //  }
+            //         }
+            //         post
+            //         {
+            //             always
+            //             {
+            //                 echo "Stage 'ASTREE' completed."
+            //             }
+            //         }
+            //     }
+                stage('Build ATTiny')
+                {
+                    agent
+                    {
+                        label 'AMG-HPEDU-BUILD-ATTINY'
+                    }
+                    when
+                    {
+                        beforeAgent true
+                        beforeOptions true
+                        expression { env.ATTINY_CHANGED == 'true' }
+                    }
+                    options
+                    {
+                        lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-GENERIC', priority: PIPELINE_PRIORITY)
+                    }
+                    steps
+                    {
+                        processATTiny(PIPELINE_PRIORITY)
+                    }
+                }
+                stage('Unittest ATTiny')
+                {
+                    agent
+                    {
+                        label 'AMG-HPEDU-UT-ATTINY'
+                    }
+                    when
+                    {
+                        beforeAgent true
+                        beforeOptions true
+                        expression { env.ATTINY_CHANGED == 'true' }
+                    }
+                    options
+                    {
+                        lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-GENERIC', priority: PIPELINE_PRIORITY)
+                    }
+                    steps
+                    {
+                        processUT_ATTiny(PIPELINE_PRIORITY)
+                    }
+                }
+                stage ('MemMap Check')
+                {
+                    agent
+                    {
+                        node
+                        {
+                            label 'AMG-HPEDU-MEMMAP'
+                        }
+                    }
+                    options
+                    {
+                        lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-GENERIC', priority: PIPELINE_PRIORITY)
+                    }
+                    steps
+                    {
+                        script
+                        {
+                            memmap.gen(PIPELINE_PRIORITY)
+                        }
+                    }
+                }
+                stage ('Tresos Generation')
+                {
+                    agent
+                    {
+                        node
+                        {
+                            label 'AMG-HPEDU-TRESOS'
+                        }
+                    }
+                    options
+                    {
+                        lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-GENERIC', priority: PIPELINE_PRIORITY)
+                    }
+                    steps
+                    {
+                        script {
+                            tresos.processGeneration(PIPELINE_PRIORITY)
+                        }
+
+                    }
+                    post
+                    {
+                        always
+                        {
+                            script {
+                                tresos.postGeneration()
+                                tresos.postGenerationCheckFile()
+                                tresos.postCheckFile()
+                                jenkinsOps.prepws()
+                            }
+                        }
+                    }
+                }
+                stage ('Check code format')
+                {
+                    agent
+                    {
+                        node
+                        {
+                            label 'AMG-HPEDU-CLANG'
+                            customWorkspace "E:\\Jenkins\\workspace\\clang_${JOB_BASE_NAME}"
+                        }
+                    }
+                    options
+                    {
+                        lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-GENERIC', priority: PIPELINE_PRIORITY)
+                    }
+                    steps
+                    {
+                        script
+                        {
+                            clangFormat.process(PIPELINE_PRIORITY)
+                        }
+                    }
+                    post
+                    {
+                        always
+                        {
+                            recordIssues (enabledForFailure: true, skipBlames: true,
+                                qualityGates: [
+                                    [threshold: 1, type: 'TOTAL_NORMAL', unstable: false],
+                                    [threshold: 1, type: 'NEW_NORMAL', unstable: false],
+                                    [threshold: 1, type: 'TOTAL_HIGH', unstable: false],
+                                    [threshold: 1, type: 'NEW_HIGH', unstable: false],
+                                    [threshold: 1, type: 'TOTAL_ERROR', unstable: false],
+                                    [threshold: 1, type: 'NEW_ERROR', unstable: false]
+                                ], tools: [clang(name: 'Clang Formater', id: "CLANGFORMAT", pattern: "**/format.warn")],
+                                sourceDirectories: [[path: 'amg-hpedu/100_SwAppl']])
+                            script {
+                                jenkinsOps.prepws()
+                            }
+                        }
+                    }
+                }
+//                stage ('Host build VS')
+//                {
+//                    agent
+//                    {
+//                        label 'AMG-HPEDU-VISUALSTUDIO'
+//                    }
+//                    options
+//                    {
+//                        lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-VISUALSTUDIO', priority: PIPELINE_PRIORITY)
+//                    }
+//                    steps
+//                    {
+//                        processHostBuildVS(PIPELINE_PRIORITY)
+//                    }
+//                    post
+//                    {
+//                        always
+//                        {
+//                            postHostBuildVS()
+//                        }
+//                    }
+//                }
+                stage ('Intg Test: Customer build')
+                {
+                    agent
+                    {
+                        label 'AMG-HPEDU-TASKING'
+                    }
+                    options
+                    {
+                        lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-TASKING', priority: PIPELINE_PRIORITY)
+                    }
+                    steps
+                    {
+                        customerbuild(PIPELINE_PRIORITY)
+                    }
+                }
+//               stage('Gliwa Target')
+//               {
+//                   stages
+//                   {
+//                       stage ('Build GLiwa libs')
+//                       {
+//                           agent
+//                           {
+//                               label 'AMG-HPEDU-TASKING'
+//                           }
+//                           options
+//                           {
+//                               lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-TASKING', priority: PIPELINE_PRIORITY)
+//                           }
+//                           steps
+//                           {
+//                               script
+//                               {
+//                                   try
+//                                   {
+//                                       processBuildGLiwaLib(STAGE_NAME, PIPELINE_PRIORITY)
+//                                   }
+//                                   catch (Exception e)
+//                                   {
+//                                       throw e
+//                                   }
+//                               }
+//                           }
+//                           post
+//                           {
+//                               always
+//                               {
+//                                   postBuildGLiwaLib(STAGE_NAME)
+//                               }
+//                           }
+//                       }
+//                   }
+//               }
+                stage('main Target')
+                {
+                    stages
+                    {
+                        stage ('Build libs')
+                        {
+                            agent
+                            {
+                                label 'AMG-HPEDU-TASKING'
+                            }
+                            options
+                            {
+                                lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-TASKING', priority: PIPELINE_PRIORITY)
+                            }
+                            steps
+                            {
+                                script
+                                {
+                                    jenkinsOps.printAgentWSInfo()
+                                    processBuildLib(STAGE_NAME, PIPELINE_PRIORITY)
+
+                                }
+                            }
+                            post
+                            {
+                                always
+                                {
+                                    postBuildLib(STAGE_NAME)
+                                }
+                            }
+                        }
+                        stage ('Generate A2L')
+                        {
+                            when{
+                                expression { currentBuild.currentResult == 'SUCCESS' }    //added by kumbhvsh
+                            }
+                            
+                            agent
+                            {
+                                label 'AMG-HPEDU-A2L'
+                            }
+                            options
+                            {
+                                lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-GENERIC', priority: PIPELINE_PRIORITY)
+                            }
+                            steps
+                            {
+                                processA2Lgeneration(STAGE_NAME, PIPELINE_PRIORITY)
+                            }
+                            post
+                            {
+                                always
+                                {
+                                    postGenerateA2L(STAGE_NAME)
+                                }
+                            }
+                        }
+                        stage ('Merge Calib and Semantic CA')
+                        {
+                            when{
+                                expression { currentBuild.currentResult == 'SUCCESS' }    //added by kumbhvsh
+                            }
+                            steps
+                            {
+                                script
+                                {   echo "Stage '${STAGE_NAME}' completed. Current build result: ${currentBuild.result}"
+
+
+                                     try {
+                                        parallel([failFast: true] + POST_BUILD)
+                                    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                                        // Interruption from timeout/abort/failFast cancellation
+                                        echo "Caught FlowInterruptedException (will force FAILURE): ${fie}"
+                                        currentBuild.result = 'FAILURE'
+                                        error("Converted interruption to FAILURE") // throws a non-interruption error -> final result = FAILURE
+                                    } catch (InterruptedException ie) {
+                                        // Some steps (like SCM) can throw plain InterruptedException
+                                        echo "Caught InterruptedException (will force FAILURE): ${ie}"
+                                        currentBuild.result = 'FAILURE'
+                                        error("Converted InterruptedException to FAILURE")
+                                    } catch (Exception e) {
+                                        echo "Caught Exception: ${e}"
+                                        isParallelStage1Failed=true
+                                        currentBuild.result = 'FAILURE'
+                                        throw e // Normal exception -> final result = FAILURE
+                                    }
+                                    // try {
+                                    //     parallel([failFast: true] + POST_BUILD)
+                                    // } catch (Exception e) {
+                                    //     // If the fail-fast canceled siblings, force a FAILURE result for the job
+                                    //     // def isFailFast = (e.causes?.toString() ?: '').contains('ParallelStep$FailFastCause')
+                                    //     echo "Inside try catch in Merge Calib"
+                                    //     def isFailFast = e.toString().contains('ParallelStep$FailFastCause')
+                                    //     echo "isFailFast - ${isFailFast}"
+                                    //     // if (isFailFast) {
+                                    //     //     echo "Inside catch result is ${currentBuild.result}"
+                                    //     currentBuild.result = 'FAILURE'
+                                    //     throw e
+                                    //     echo "After error throw result is ${currentBuild.result}"
+                                    // }
+
+                                        // Actual scripted parallel with failfast
+                                        // parallel([failFast: true] + POST_BUILD)
+
+
+                                    // parallel POST_BUILD+[failFast: true]
+
+
+                                    // try{
+                                    //     parallel POST_BUILD+[failFast: true]
+                                    // }
+                                    // catch (Exception e)
+                                    // {
+                                    //     echo "ERROR: ${e}"
+                                    //     currentBuild.result = 'FAILURE'
+                                    //     // abort_jenkins_build()
+                                    // }
+                                }
+                            }
+                        }
+                        // stage ('Trace32 OTT and Canoe Test')
+                        // {
+                        //     when
+                        //     {
+                        //         beforeAgent true
+                        //         beforeOptions true
+                        //         anyOf{
+                        //             environment name: 'TRACE32_OTTTEST', value: 'true'
+                        //             environment name: 'TRACE32_CANOETEST', value: 'true'
+                        //             expression { isimportantbranch() }
+                        //         }
+                        //     }
+                        //     steps
+                        //     {
+                        //         script
+                        //         {
+                        //             echo "Inside trace32 result is ${currentBuild.result}"
+                        //             try {
+                        //                 parallel([failFast: true] + TRACE32)
+                        //             } catch (Exception e) {
+                        //                 // If the fail-fast canceled siblings, force a FAILURE result for the job
+                        //                 def isFailFast = e.toString().contains('ParallelStep$FailFastCause')
+                        //                 if (isFailFast) { currentBuild.result = 'FAILURE' }
+                        //                 throw e
+                        //             }
+                        //             // parallel TRACE32+[failFast: true]
+                        //             // parallel([failFast: true] + TRACE32)
+                        //             // try{
+                        //             //     parallel TRACE32
+                        //             // }
+                        //             // catch (Exception e)
+                        //             // {
+                        //             //     echo "ERROR: ${e}"
+                        //             //     currentBuild.result = 'FAILURE'
+                        //             //     // abort_jenkins_build()
+                        //             // }
+
+                        //             // catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                        //             //     // Actual scripted parallel with failfast
+                        //             //     parallel([failFast: true] + TRACE32)
+
+                        //             // }
+
+                        //         }
+                        //     }
+                        // }
+                    }
+                }
+                stage ('mcs build')
+                {
+                    agent
+                    {
+                        label 'AMG-HPEDU-MCS-BUILD'
+                    }
+                    options
+                    {
+                        lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-GENERIC', priority: PIPELINE_PRIORITY)
+                    }
+                    steps
+                    {
+                        script
+                        {
+                            mcs.build(PIPELINE_PRIORITY)
+                            mcs.postBuildCheck(PIPELINE_PRIORITY)
+                        }
+                    }
+                }
+                // stage('UT-XUNIT PIL')
+                // {
+                //     agent
+                //     {
+                //         label 'TC38XX'
+                //     }
+                //     when
+                //     {
+                //         beforeAgent true
+                //         beforeOptions true
+                //         allOf
+                //         {
+                //             expression { return !params.RELEASECANDIDATE }
+                //             expression { isPR() }
+                //         }
+                //     }
+                //     options
+                //     {
+                //         lock(resource: null, quantity: 1,  label: 'TC38XX', priority: PIPELINE_PRIORITY)
+                //     }
+                //     steps
+                //     {
+                //         executeUTJob("XUNIT", PIPELINE_PRIORITY)
+                //     }
+                // }
+                stage('UT-XUNIT SIL')
+                {
+                    agent
+                    {
+                        label 'TC38XXINSTRSIM'
+                    }
+                    when
+                    {
+                        beforeAgent true
+                        beforeOptions true
+                        expression { currentBuild.currentResult == 'SUCCESS' }
+                        // expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
+                        allOf
+                        {
+                            expression { return (!params.RELEASECANDIDATE || !isScheduledRC()) }
+                            anyOf
+                            {
+                                expression { ismainorMNT() }
+                                expression { params.TRIGGER_UNIT_TEST }
+                                expression { isPR() }
+                            }
+                        }
+                    }
+                    options
+                    {
+                        lock(resource: null, quantity: 1,  label: 'TC38XXINSTRSIM', priority: PIPELINE_PRIORITY)
+                    }
+                    steps {
+                        script {
+                            // try {
+                            // echo "Present in sil"
+                            // // executeUTJob("XUNIT", PIPELINE_PRIORITY)
+                            // } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                            // echo "UT-XUNIT SIL was cancelled (failFast/parallel cancellation): ${fie}"
+                            // // do not rethrow
+                            // }
+
+                            try {
+                                echo "Inside sil"
+                                // executeUTJob("XUNIT", PIPELINE_PRIORITY)
+                            } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                                echo "UT-XUNIT SIL cancelled by failFast: ${fie}"
+                                // do not rethrow
+                            }
+                        }
+                        }
+                    // steps
+                    // {   echo "Present in sil"
+
+                    //     // executeUTJob("XUNIT", PIPELINE_PRIORITY)
+                    // }
+                }
+                stage('Integration Test')
+                {
+                    agent
+                    {
+                        node
+                        {
+                            label 'TC38XXINSTRSIM'
+                        }
+                    }
+                    when
+                    {
+                        beforeAgent true
+                        beforeOptions true
+                        expression { currentBuild.currentResult == 'SUCCESS' }
+
+                        // expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
+                        allOf
+                        {
+                            anyOf
+                            {
+                                expression { return isimportantbranch() }
+                                environment name: 'TRIGGER_INT_TEST', value: 'true'
+                            }
+                            expression { return !params.RELEASECANDIDATE || !isScheduledRC() }
+                        }
+                    }
+                    options
+                    {
+                        lock(resource: null, quantity: 1,  label: 'TC38XXINSTRSIM', priority: PIPELINE_PRIORITY)
+                    }
+                    steps {
+                        script {
+                            try {
+                            // processIT(STAGE_NAME, PIPELINE_PRIORITY)
+                            } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                            echo "Integration cancelled by failFast: ${fie}"
+                            return
+                            }
+                         }
+                        }
+                    // steps {
+                    //     script {
+                    //         try {
+                    //         catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                    //             processIT(STAGE_NAME, PIPELINE_PRIORITY)
+
+                    //             if (currentBuild.currentResult != 'SUCCESS') {
+                    //             JOB_STATE = "Testing_stage_failed"
+                    //             }
+                    //         }
+                    //         } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                    //         // This happens when the branch is cancelled due to failFast in another branch
+                    //         echo "Integration Test was cancelled (failFast/parallel cancellation): ${fie}"
+
+                    //         // Do NOT rethrow => avoids overall build becoming ABORTED due to this branch.
+                    //         // Leave overall result to the real failing branch (e.g., Merge Calibrationfiles).
+                    //         }
+                    //     }
+                    //     }
+                    // steps
+                    // {
+                    //     catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE')
+                    //     {
+                    //         // processIT(STAGE_NAME, PIPELINE_PRIORITY)
+                    //         script
+                    //         {
+                    //             if(currentBuild.currentResult != 'SUCCESS')
+                    //             {
+                    //                 JOB_STATE = "Testing_stage_failed"
+                    //             }
+                    //         }
+                    //     }
+                    // }
+
+                    post {
+                        always {
+                            script {
+                            def reports = findFiles(glob: '**/IT_xunit_report.xml')
+                            if (reports.size() == 0) {
+                                echo "No IT_xunit_report.xml found (likely cancelled by failFast). Skipping postIT."
+                            } else {
+                                postIT(STAGE_NAME, PIPELINE_PRIORITY)
+                            }
+                            }
+                        }
+                        }
+                    // post
+                    // {
+                    //     always
+                    //     {
+                    //         catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE')
+                    //         {
+                    //             postIT(STAGE_NAME, PIPELINE_PRIORITY)
+                    //         }
+                    //     }
+                    // }
+                }
+            }
+            post {
+                always {
+                    script {
+                    if (isParallelStage1Failed) {
+                        echo "[OUTSIDE PARALLEL STAGE 1]"
+                        echo "Parallel Stage 1 had failures; forcing build FAILURE (even if ABORTED due to failFast cancellation)."
+                        currentBuild.rawBuild.result = hudson.model.Result.FAILURE
+                        // currentBuild.currentResult='FAILURE'
+                        // error("one or more stage(s) in Parallel Stage 1 failed")
+                    }
+                    }
+                }
+                success
+                {
+                    script
+                    {
+                        if (params.RELEASECANDIDATE)
+                        {
+                            emailext(
+                                to: "${EMAIL_USER_LIST}",
+                                subject: "RC Build Successful: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                                body: "Parallel Stage 1 Successful - Please check the details at ${env.BUILD_URL}"
+                            )
+                        }
+                        JOB_STATE = "Build_only"
+                    }
+                }
+                failure
+                {
+                    script
+                    {
+                        if (params.RELEASECANDIDATE)
+                        {
+                            emailext(
+                                to: "${EMAIL_USER_LIST}",
+                                subject: "RC Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                                body: "The Parallel Stage 1 has failed. Please check the details at ${env.BUILD_URL}"
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        stage ('Package build')
+        {
+            parallel
+            {
+                stage('Package')
+                {
+                    stages
+                    {
+                        /* In this stage all version log files are collected and merged. */
+                        stage('collect all Versionlog Infos')
+                        {
+                            agent
+                            {
+                                label 'AMG-HPEDU-PACKAGE'
+                            }
+                            options
+                            {
+                                lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-GENERIC', priority: PIPELINE_PRIORITY)
+                            }
+                            when
+                            {
+                                beforeAgent true
+                                beforeOptions true
+                                anyOf{
+                                    expression { return isScheduledRC() }
+                                    environment name: 'RELEASECANDIDATE', value: 'true'
+                                }
+                            }
+                            steps
+                            {
+                                collectallVersionlogartefacts(PIPELINE_PRIORITY)
+                            }
+                        }
+                        stage('Create AMG_Development package')
+                        {
+                            agent
+                            {
+                                label 'AMG-HPEDU-PACKAGE'
+                            }
+                            options
+                            {
+                                lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-GENERIC', priority: PIPELINE_PRIORITY)
+                            }
+                            environment
+                            {
+                                GIT_HASH = "${CommitHash}"
+                            }
+                            when
+                            {
+                                beforeAgent true
+                                beforeOptions true
+                                anyOf{
+                                    expression { return isScheduledRC() }
+                                    environment name: 'RELEASECANDIDATE', value: 'true'
+                                }
+                            }
+                            steps
+                            {
+                                processpackagecreation(JOB_STATE, PIPELINE_PRIORITY)
+                            }
+                        }
+                        stage( 'Artifactory Stage 1' )
+                        {
+                            agent
+                            {
+                                label 'AMG-HPEDU-PACKAGE'
+                            }
+                            options
+                            {
+                                lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-GENERIC', priority: PIPELINE_PRIORITY)
+                            }
+                            when
+                            {
+                                beforeAgent true
+                                beforeOptions true
+                                anyOf{
+                                    expression { return isScheduledRC() }
+                                    environment name: 'RELEASECANDIDATE', value: 'true'
+                                }
+                            }
+                            steps
+                            {
+                                script {
+                                    jenkinsOps.printAgentWSInfo()
+                                    artifactory.process()
+                                }
+
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // stage ('Parallel Stage 2')
+        // {
+        //     parallel
+        //     {
+        //         stage('Unit Test')
+        //         {
+        //             when {
+        //                 beforeAgent true
+        //                 beforeOptions true
+        //                 anyOf {
+        //                     expression { return params.RELEASECANDIDATE }
+        //                     expression { return ONLY_RUN_UT == true  }
+        //                 }
+        //             }
+        //             steps
+        //             {
+        //                 script
+        //                 {
+        //                     parallel UTjobs
+        //                     env.UT_EXECUTED = 'true'
+        //                 }
+        //             }
+        //         }
+        //         stage( 'Integration Test SIL')
+        //         {
+        //             agent
+        //             {
+        //                 node
+        //                 {
+        //                     label 'TC38XXINSTRSIM'
+        //                 }
+        //             }
+        //             when
+        //             {
+        //                 beforeAgent true
+        //                 beforeOptions true
+        //                 expression { return params.RELEASECANDIDATE }
+        //             }
+        //             options
+        //             {
+        //                 lock(resource: null, quantity: 1,  label: 'TC38XXINSTRSIM', priority: PIPELINE_PRIORITY)
+        //             }
+        //             steps
+        //             {
+        //                 catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE')
+        //                 {
+        //                     processIT(STAGE_NAME, PIPELINE_PRIORITY)
+        //                     script
+        //                     {
+        //                         if(currentBuild.currentResult != 'SUCCESS')
+        //                         {
+        //                             JOB_STATE = "Testing_stage_failed"
+        //                         }
+        //                     }
+        //                 }
+        //             }
+        //             post
+        //             {
+        //                 always
+        //                 {
+        //                     catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE')
+        //                     {
+        //                         postIT(STAGE_NAME, PIPELINE_PRIORITY)
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //         stage ('Trace32 OTT and Canoe Test')
+        //         {
+        //             when
+        //             {
+        //                 beforeAgent true
+        //                 beforeOptions true
+        //                 expression { params.RELEASECANDIDATE }
+        //             }
+        //             steps
+        //             {
+        //                 script
+        //                 {
+        //                     parallel TRACE32
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
+        // stage('collect all Versionlog Infos Stage 2')
+        // {
+        //     agent
+        //     {
+        //         label 'AMG-HPEDU-GENERIC'
+        //     }
+        //     options
+        //     {
+        //         lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-GENERIC', priority: PIPELINE_PRIORITY)
+        //     }
+        //     steps
+        //     {
+        //         script
+        //         {
+        //             if (!params.RELEASECANDIDATE)
+        //             {
+        //                 collectallVersionlogartefacts(PIPELINE_PRIORITY)
+        //             }
+        //             if (JOB_STATE != "Testing_stage_failed")
+        //             {
+        //                 JOB_STATE = "Complete"
+        //             }
+        //             collectallVersionlogartefacts_UT(PIPELINE_PRIORITY)
+        //         }
+        //     }
+        // }
+        // stage('Create AMG_Development package Stage 2')
+        // {
+        //     agent
+        //     {
+        //         label 'AMG-HPEDU-GENERIC'
+        //     }
+        //     environment
+        //     {
+        //         GIT_HASH = "${CommitHash}"
+        //     }
+        //     options
+        //     {
+        //         lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-GENERIC', priority: PIPELINE_PRIORITY)
+        //     }
+        //     steps
+        //     {
+        //         script
+        //         {
+        //             if (!params.RELEASECANDIDATE && ONLY_RUN_UT == false)
+        //             {
+        //                 processpackagecreation(JOB_STATE, PIPELINE_PRIORITY)
+        //                 if(env.ATTINY_CHANGED == 'true')
+        //                 {
+        //                     def ATTINY_VERSION = getATTinyVersion()
+        //                     processAttinyPackage(JOB_STATE, ATTINY_VERSION)
+        //                 }
+        //             }
+        //         }
+        //         processpackagecreation_UT(JOB_STATE, PIPELINE_PRIORITY)
+        //     }
+        // }
+        // stage( 'Artifactory Stage 2' )
+        // {
+        //     agent
+        //     {
+        //         label 'AMG-HPEDU-GENERIC'
+        //     }
+        //     options
+        //     {
+        //         lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-GENERIC', priority: PIPELINE_PRIORITY)
+        //     }
+        //     steps
+        //     {
+        //         script {
+        //             jenkinsOps.printAgentWSInfo()
+        //             artifactory.processUT(ONLY_RUN_UT)
+        //             artifactory.setProperty(JOB_STATE)
+        //         }
+        //     }
+        // }
+    }
+    post
+    {
+        always {
+            script {
+            if (isParallelStage1Failed) 
+            {
+                echo "[OUTSIDE PIPELINE]Forcing FAILURE in pipeline post (no rawBuild)."
+
+                // if Jenkins currently thinks ABORTED, overwrite with FAILURE
+                if (currentBuild.currentResult == 'ABORTED') {
+                currentBuild.result = 'FAILURE'
+                } else {
+                currentBuild.result = 'FAILURE'
+                }
+            }
+            }
+        }
+        unsuccessful
+        {
+            script
+            {
+                if (! ((env.BRANCH_NAME =~ 'main*|MNT_REL-*' ) || params.RELEASECANDIDATE))
+                {
+                    emailext body: '$DEFAULT_CONTENT', recipientProviders: [[$class: 'DevelopersRecipientProvider']], subject: '$DEFAULT_SUBJECT'
+                }
+                else
+                {
+                    emailext body: "The Release Candidate has failed. Please check the details at ${env.BUILD_URL}",
+                             subject: "Build Failed: Release Candidate ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                             to: "${EMAIL_USER_LIST}"
+                }
+            }
+        }
+        success
+        {
+            script
+            {
+                if (params.RELEASECANDIDATE)
+                {
+                    emailext body: '''The Release Candidate ran successful. Please check the details. Link to:
+
+                    Github: https://github.vitesco.io/GHE-Schaeffler-Group/amg-hpedu-bsw/tree/DEV_SPR-${SPRINTID}_RC-${SW_VERSION_MAJOR}.${SW_VERSION_MINOR}.${BUILD_NUMBER}_B
+                    Jenkins: ${BUILD_URL}
+                                    ''',
+                                     subject: "Build Successful: Release Candidate ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                                     to: "${EMAIL_USER_LIST}"
+                }
+                else
+                {
+                    emailext body: '$DEFAULT_CONTENT', recipientProviders: [[$class: 'DevelopersRecipientProvider']], subject: '$DEFAULT_SUBJECT'
+                }
+            }
+        }
+    }
+}
