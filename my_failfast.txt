@@ -1,82 +1,4 @@
-pipeline
-{
-    agent none
-    environment
-    {
-        CANOE_PYTHON                    = "E:\\Prg\\python-3.11.8-native-windows-embed-amd64_v1.1.0"
-        HEXVIEWTOOLCHAIN                = "E:\\Prg\\Hexview\\V1.15.04"
-        VCDM_PATH                       = "E:\\Prg\\Vector\\vCDM_21.1_SP2\\vCDMstudio\\Exec64"
-        ASAP2TOOLCHAIN                  = "E:\\Prg\\Vector\\ASAP2Tool-Set_15.0\\Bin"
-        BSWBUILDENV                     = "E:\\Prg\\BSW\\BuildEnv\\mingw64\\bin;E:\\Prg\\BSW\\BuildEnv\\usr\\bin"
-        BSWBUILDENV_DEV                 = "E:\\Prg\\BSW\\BuildEnv-dev\\mingw64\\bin;E:\\Prg\\BSW\\BuildEnv-dev\\usr\\bin"
-        PARASOFT_TOOLCHAIN              = "E:\\Prg\\Parasoft\\2024.1.0\\cpptest"
-        TASKING_BASE_PATH               = "E:/Prg/TASKING/TriCore_v6.3r1p9"
-        TOOLPATHGCC                     = "E:\\Prg\\gcc\\9.5.0_x64\\mingw64\\bin"
-        GCC                             = "${TOOLPATHGCC}"
-        TOOLPATH                        = "${TASKING_BASE_PATH}/ctc/bin"
-        NODEJS                          = "E:\\Prg\\node-v16.13.2-win-x64"
-        WS008190_GIT                    = "E:\\Prg\\Git\\bin"
-        ASTREE_BASE                     = "E:/Prg/AbsInt/AdvancedAnalyzer/c/b14842278/bin"
-        MSBuild                         = "E:/Prg/Microsoft/Visual_Studio/2017/BuildTools/MSBuild/15.0/Bin"
-        HIGHTECH_MCS                    = "E:\\Prg\\HighTec\\toolchains\\mcs\\v3.0\\bin"
-        PATH                            = "${HEXVIEWTOOLCHAIN};${NODEJS};${ASAP2TOOLCHAIN};${TOOLPATHGCC};${PARASOFT_TOOLCHAIN};${PARASOFT_TOOLCHAIN}\\bin\\engine\\bin;${TOOLPATH};${BSWBUILDENV};${BSWBUILDENV_DEV};${ASTREE_BASE};${MSBuild};${VCDM_PATH};${HIGHTECH_MCS};C:\\WINDOWS\\system32;C:\\WINDOWS;C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0"
-        TOOL_INSTALLATION_PATH          = "E:/Prg"
-        TRACE32                         = "E:\\Prg\\Lauterbach\\T32_2023-02\\bin\\windows64"
-        TSK_OPTIONS_FILE_SW160800v6_3r1 = "E:\\Prg\\Tasking\\TriCore_v6.3r1p9\\etc\\licopt.txt"
-        UTNM_ROOT                       = "E:/Prg/SEH/SEH_UTN_Manager"
-        SZIP                            = "c:\\Program Files\\7-Zip\\7z.exe"
-        // Settings for Artifactory
-        ARTIFACTORY_ID                  = "artifactory.schaeffler.com"
-        PkgVersion                      = "${JOB_BASE_NAME}-${BUILD_NUMBER}"
-        RT_BUILD_NAME                   = "amg :: AMG_Development"
-        RT_BUILD_NUMBER                 = "${JOB_BASE_NAME}.${SW_VERSION_MAJOR}.${SW_VERSION_MINOR}.${BUILD_NUMBER}".replaceAll("[^A-Za-z0-9]", "-")
-        RLM_LICENSE                     = "hightec-lic-srv@5053"
-        JENKINSUSER                     = "JenkinsUsr"
-        DESTINATION_BRANCH              = "${env.CHANGE_TARGET}"
-        TRIGGER_INT_TEST                = "${params.TRIGGER_INT_TEST}"
-        EMAIL_USER_LIST                 = "laemmdvi@schaeffler.com, ubharpan@schaeffler.com, pardenle@schaeffler.com, schmiptc@schaeffler.com, wolfgang.schirmer@schaeffler.com, genzeaex@schaeffler.com"
-        MIRROR_DIR                      = "e:/git-mirrors_for_Jenkins/mainrepo.git"
-        MIRROR_DIR_MCAL                 = "e:/git-mirrors_for_Jenkins/MCALrepo.git"
-        MIRROR_DIR_SafeTpack            = "e:/git-mirrors_for_Jenkins/SafeTpackrepo.git"
-        MIRROR_DIR_Parasoft             = "e:/git-mirrors_for_Jenkins/Parasoftrepo.git"
-        MIRROR_DIR_RDNA                 = "e:/git-mirrors_for_Jenkins/RDNArepo.git"
-        MIRROR_DIR_amg_hpedu_altium_tasking = "e:/git-mirrors_for_Jenkins/amg-hpedu-altium-taskingrepo.git"
-        MIRROR_DIR_bp_infrastructure = "e:/git-mirrors_for_Jenkins/bp-infrastructurerepo.git"
-        REPO_URL   = "https://github.vitesco.io/GHE-Schaeffler-Group/amg-hpedu-bsw.git"
-        TRIGGER_UNIT_TEST               = "${params.TRIGGER_UNIT_TEST}"
-    }
-    options
-    {
-        // Do not checkout automatically at each stage entry
-        skipDefaultCheckout()
-        // Do not run multiple builds in parallel
-        disableConcurrentBuilds ()
-        // Do not resume on controller restart
-        disableResume ()
-        // Only keep some builds' artifacts and output
-        buildDiscarder(logRotator(artifactNumToKeepStr: '20', numToKeepStr: '20'))
-        // handle color of matlab warnings and errors
-        ansiColor('xterm')
-        // prepend timestamps on the console output
-        timestamps()
-
-        // parallelsAlwaysFailFast()
-    }
-    parameters
-    {
-         booleanParam(name: 'CLEAN_WS',             defaultValue: false,    description: 'With this Parameter is it possible to clean the workspace on development branches')
-         booleanParam(name: 'RELEASECANDIDATE',     defaultValue: false,    description: 'Please set this value to \"true\" if you should create a release candidate at the Sprint End')
-         booleanParam(name: 'TRACE32_OTTTEST',      defaultValue: false,    description: 'activate the OTT(Faultinjection) test')
-         booleanParam(name: 'TRACE32_CANOETEST',    defaultValue: false,    description: 'activate a small flash test')
-         booleanParam(name: 'TRIGGER_INT_TEST',     defaultValue: false,    description: 'Trigger Integration Test Stage')
-         booleanParam(name: 'TRIGGER_UNIT_TEST',    defaultValue: false,    description: 'Trigger Unit Test Stage')
-         string(name:       'SW_VERSION_MAJOR',     defaultValue: '',       description: 'It is only important, if you create a RC. Set the SW Major Version in this format: 24, nothing else')
-         string(name:       'SW_VERSION_MINOR',     defaultValue: '',       description: 'It is only important, if you create a RC. Set the SW Minor Version in this format: 00, nothing else')
-         string(name:       'CHECKOUTPOINT',        defaultValue: '',       description: 'It is only important, if you create a RC. Which checkoutpoint is for the Release?.(example: branch: */TASK-0815_PREPREL or commit id: a130030)')
-         string(name:       'SPRINTID',             defaultValue: '',       description: 'For which SPRINT is the RC?(looks here: <a href="https://atmsw-database.schaeffler.com:8443/cb/category/335588">AMG SPRINT</a>)')
-         string(name:       'RELEASEID',            defaultValue: '',       description: 'For which Release is the RC?(looks here: <a href="https://atmsw-database.schaeffler.com:8443/cb/category/334958">AMG RELEASE</a>)')
-    }
-    stages
+stages
     {
         stage ('preparation for RC creation')
         {
@@ -518,7 +440,17 @@ pipeline
                             }
                             steps
                             {
-                                processA2Lgeneration(STAGE_NAME, PIPELINE_PRIORITY)
+                                
+                                script {
+                                
+                                try {
+                                    processA2Lgeneration(STAGE_NAME, PIPELINE_PRIORITY)
+                                } catch (e) {
+                                    isParallelStage1Failed = true
+                                    currentBuild.result = 'FAILURE'
+                                    error("[DEBUG][A2L] Generate a2l failed: ${e}")
+                                }
+                                }
                             }
                             post
                             {
@@ -542,22 +474,33 @@ pipeline
 
                                      try {
                                         parallel([failFast: true] + POST_BUILD)
-                                    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
-                                        // Interruption from timeout/abort/failFast cancellation
-                                        echo "Caught FlowInterruptedException (will force FAILURE): ${fie}"
+                                     }
+                                     catch (e) {
+                                        isParallelStage1Failed = true
                                         currentBuild.result = 'FAILURE'
-                                        error("Converted interruption to FAILURE") // throws a non-interruption error -> final result = FAILURE
-                                    } catch (InterruptedException ie) {
-                                        // Some steps (like SCM) can throw plain InterruptedException
-                                        echo "Caught InterruptedException (will force FAILURE): ${ie}"
-                                        currentBuild.result = 'FAILURE'
-                                        error("Converted InterruptedException to FAILURE")
-                                    } catch (Exception e) {
-                                        echo "Caught Exception: ${e}"
-                                        isParallelStage1Failed=true
-                                        currentBuild.result = 'FAILURE'
-                                        throw e // Normal exception -> final result = FAILURE
-                                    }
+                                        error("Build libs failed: ${e}")
+                                    } 
+                                    // catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                                    //     // Interruption from timeout/abort/failFast cancellation
+                                    //     echo "Caught FlowInterruptedException (will force FAILURE): ${fie}"
+                                    //     currentBuild.result = 'FAILURE'
+                                    //     error("Converted interruption to FAILURE") // throws a non-interruption error -> final result = FAILURE
+                                    // } catch (InterruptedException ie) {
+                                    //     // Some steps (like SCM) can throw plain InterruptedException
+                                    //     echo "Caught InterruptedException (will force FAILURE): ${ie}"
+                                    //     currentBuild.result = 'FAILURE'
+                                    //     error("Converted InterruptedException to FAILURE")
+                                    // } catch (Exception e) {
+                                    //     echo "Caught Exception: ${e}"
+                                    //     isParallelStage1Failed=true
+                                    //     currentBuild.result = 'FAILURE'
+                                    //     throw e // Normal exception -> final result = FAILURE
+                                    // }  --> it is working 
+
+
+
+
+
                                     // try {
                                     //     parallel([failFast: true] + POST_BUILD)
                                     // } catch (Exception e) {
@@ -592,52 +535,67 @@ pipeline
                                 }
                             }
                         }
-                        // stage ('Trace32 OTT and Canoe Test')
-                        // {
-                        //     when
-                        //     {
-                        //         beforeAgent true
-                        //         beforeOptions true
-                        //         anyOf{
-                        //             environment name: 'TRACE32_OTTTEST', value: 'true'
-                        //             environment name: 'TRACE32_CANOETEST', value: 'true'
-                        //             expression { isimportantbranch() }
-                        //         }
-                        //     }
-                        //     steps
-                        //     {
-                        //         script
-                        //         {
-                        //             echo "Inside trace32 result is ${currentBuild.result}"
-                        //             try {
-                        //                 parallel([failFast: true] + TRACE32)
-                        //             } catch (Exception e) {
-                        //                 // If the fail-fast canceled siblings, force a FAILURE result for the job
-                        //                 def isFailFast = e.toString().contains('ParallelStep$FailFastCause')
-                        //                 if (isFailFast) { currentBuild.result = 'FAILURE' }
-                        //                 throw e
-                        //             }
-                        //             // parallel TRACE32+[failFast: true]
-                        //             // parallel([failFast: true] + TRACE32)
-                        //             // try{
-                        //             //     parallel TRACE32
-                        //             // }
-                        //             // catch (Exception e)
-                        //             // {
-                        //             //     echo "ERROR: ${e}"
-                        //             //     currentBuild.result = 'FAILURE'
-                        //             //     // abort_jenkins_build()
-                        //             // }
+                        stage ('Trace32 OTT and Canoe Test')
+                        {
+                            when
+                            {
+                                beforeAgent true
+                                beforeOptions true
+                                anyOf{
+                                    environment name: 'TRACE32_OTTTEST', value: 'true'
+                                    environment name: 'TRACE32_CANOETEST', value: 'true'
+                                    expression { isimportantbranch() }
+                                }
+                            }
+                            steps
+                            {
+                                script
+                                {
+                                    echo "[DEBUG][TRACE]Inside trace32 result is ${currentBuild.result}"
+                                    // try {
+                                    //     parallel([failFast: true] + TRACE32)
+                                    // } catch (Exception e) {
+                                    //     // If the fail-fast canceled siblings, force a FAILURE result for the job
+                                    //     def isFailFast = e.toString().contains('ParallelStep$FailFastCause')
+                                    //     if (isFailFast) { currentBuild.result = 'FAILURE' }
+                                    //     throw e
+                                    // }
 
-                        //             // catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                        //             //     // Actual scripted parallel with failfast
-                        //             //     parallel([failFast: true] + TRACE32)
+                                    try {
+                                        parallel([failFast: true] + TRACE32)
+                                        // parallel TRACE32
+                                     }
+                                     catch (e) {
+                                        isParallelStage1Failed = true
+                                        currentBuild.result = 'FAILURE'
+                                        error("[DEBUG][TRACE] Trace32 failed: ${e}")
+                                    } 
 
-                        //             // }
 
-                        //         }
-                        //     }
-                        // }
+
+
+
+                                    // parallel TRACE32+[failFast: true]
+                                    // parallel([failFast: true] + TRACE32)
+                                    // try{
+                                    //     parallel TRACE32
+                                    // }
+                                    // catch (Exception e)
+                                    // {
+                                    //     echo "ERROR: ${e}"
+                                    //     currentBuild.result = 'FAILURE'
+                                    //     // abort_jenkins_build()
+                                    // }
+
+                                    // catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                                    //     // Actual scripted parallel with failfast
+                                    //     parallel([failFast: true] + TRACE32)
+
+                                    // }
+
+                                }
+                            }
+                        }
                     }
                 }
                 stage ('mcs build')
@@ -686,78 +644,79 @@ pipeline
                 // }
 
 
-                // stage('UT-XUNIT SIL')
-                // {
-                //     agent
-                //     {
-                //         label 'TC38XXINSTRSIM'
-                //     }
-                //     when
-                //     {
-                //         beforeAgent true
-                //         beforeOptions true
-                //         // expression { currentBuild.currentResult == 'SUCCESS' }
-                //         expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
-                //         allOf
-                //         {
-                //             expression { return (!params.RELEASECANDIDATE || !isScheduledRC()) }
-                //             anyOf
-                //             {
-                //                 expression { ismainorMNT() }
-                //                 expression { params.TRIGGER_UNIT_TEST }
-                //                 expression { isPR() }
-                //             }
-                //         }
-                //     }
-                //     options
-                //     {
-                //         lock(resource: null, quantity: 1,  label: 'TC38XXINSTRSIM', priority: PIPELINE_PRIORITY)
-                //     }
-                //     steps {
-                //         sleep time:1,unit:'MINUTES'
-                //         script {
-                //             try {
-                //                 echo "[DEBUG][SIL] STARTED"
-                //                 executeUTJob("XUNIT", PIPELINE_PRIORITY)
-                //                 echo "[DEBUG][SIL] COMPLETED"
+                stage('UT-XUNIT SIL')
+                {
+                    agent
+                    {
+                        label 'TC38XXINSTRSIM'
+                    }
+                    when
+                    {
+                        beforeAgent true
+                        beforeOptions true
+                        // expression { currentBuild.currentResult == 'SUCCESS' }
+                        expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
+                        allOf
+                        {
+                            expression { return (!params.RELEASECANDIDATE || !isScheduledRC()) }
+                            anyOf
+                            {
+                                expression { ismainorMNT() }
+                                expression { params.TRIGGER_UNIT_TEST }
+                                expression { isPR() }
+                            }
+                        }
+                    }
+                    options
+                    {
+                        lock(resource: null, quantity: 1,  label: 'TC38XXINSTRSIM', priority: PIPELINE_PRIORITY)
+                    }
+                    steps {
+                        script {
+                            try {
+                                echo "[DEBUG][SIL] STARTED"
+                                executeUTJob("XUNIT", PIPELINE_PRIORITY)
+                                echo "[DEBUG][SIL] COMPLETED"
 
-                //             } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
-                //                 echo "[DEBUG][SIL] ABORTED (cancelled by failFast/abort): ${fie}"
-                //                 // swallow only cancellation
-                //             } catch (Exception e) {
-                //                 echo "[DEBUG][SIL] FAILED (real error): ${e}"
-                //                 throw e   // keep FAILURE for real SIL problems
-                //             }
-                //             }
-                //         // script {
-                //         //     // try {
-                //         //     // echo "Present in sil"
-                //         //     // // executeUTJob("XUNIT", PIPELINE_PRIORITY)
-                //         //     // } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
-                //         //     // echo "UT-XUNIT SIL was cancelled (failFast/parallel cancellation): ${fie}"
-                //         //     // // do not rethrow
-                //         //     // }
+                            } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                                echo "[DEBUG][SIL] ABORTED (cancelled by failFast/abort): ${fie}"
+                                // swallow only cancellation
+                            } catch (Exception e) {
+                                echo "[DEBUG][SIL] FAILED (real error): ${e}"
+                                isParallelStage1Failed=true
+                                currentBuild.result='FAILURE'
+                                throw e   // keep FAILURE for real SIL problems
+                            }
+                            }
+                        // script {
+                        //     // try {
+                        //     // echo "Present in sil"
+                        //     // // executeUTJob("XUNIT", PIPELINE_PRIORITY)
+                        //     // } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                        //     // echo "UT-XUNIT SIL was cancelled (failFast/parallel cancellation): ${fie}"
+                        //     // // do not rethrow
+                        //     // }
 
 
-                //         //     echo "[DEBUG][SIL] STARTED "
-                //         //     executeUTJob("XUNIT", PIPELINE_PRIORITY)
-                //         //     echo "[DEBUG][SIL] COMPLETED "
+                        //     echo "[DEBUG][SIL] STARTED "
+                        //     executeUTJob("XUNIT", PIPELINE_PRIORITY)
+                        //     echo "[DEBUG][SIL] COMPLETED "
 
-                //         //     // try {
-                //         //     //     echo "Inside sil"
-                //         //     //     // executeUTJob("XUNIT", PIPELINE_PRIORITY)
-                //         //     // } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
-                //         //     //     echo "UT-XUNIT SIL cancelled by failFast: ${fie}"
-                //         //     //     // do not rethrow
-                //         //     // }
-                //         // }
-                //         }
-                //     // steps
-                //     // {   echo "Present in sil"
+                        //     // try {
+                        //     //     echo "Inside sil"
+                        //     //     // executeUTJob("XUNIT", PIPELINE_PRIORITY)
+                        //     // } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                        //     //     echo "UT-XUNIT SIL cancelled by failFast: ${fie}"
+                        //     //     // do not rethrow
+                        //     // }
+                        // }
+                        }
+                    // steps
+                    // {   echo "Present in sil"
 
-                //     //     // executeUTJob("XUNIT", PIPELINE_PRIORITY)
-                //     // }
-                // }
+                    //     // executeUTJob("XUNIT", PIPELINE_PRIORITY)
+                    // }
+                }
 
 
 
@@ -813,8 +772,13 @@ pipeline
                             } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
                                 echo "[DEBUG][INTE] ABORTED (cancelled by failFast/abort): ${fie}"
                                 // swallow only cancellation
+                                catchError(buildResult: 'FAILURE', stageResult: 'ABORTED') {
+                                    error("[DEBUG][INTE]Integration cancelled by failFast from catch")
+                                }
                             } catch (Exception e) {
                                 echo "[DEBUG][INTE] FAILED (real error): ${e}"
+                                isParallelStage1Failed=true
+                                currentBuild.result='FAILURE'
                                 throw e   // keep FAILURE for real SIL problems
                             }
                          }
@@ -1229,4 +1193,3 @@ pipeline
             }
         }
     }
-}
