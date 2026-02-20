@@ -1,3 +1,75 @@
+POST_BUILD['Merge Calibrationfiles'] = { executeMergeCalibrationFiles(PIPELINE_PRIORITY) }
+POST_BUILD['SemanticCA Astree'] = { executeSemanticCAAstree(PIPELINE_PRIORITY) }
+
+def executeMergeCalibrationFiles(PIPELINE_PRIORITY)
+{
+    stage ('Merge Calibrationfiles')
+    {
+        node('AMG-HPEDU-CALIB')
+        {
+            lock(resource: null, quantity: 1,  label: 'AMG-HPEDU-GENERIC', priority: PIPELINE_PRIORITY)
+            {
+                try
+                {
+                    jenkinsOps.printAgentWSInfo()
+                    processcalib(STAGE_NAME, PIPELINE_PRIORITY)
+                    processvCDM(STAGE_NAME, PIPELINE_PRIORITY)
+                }
+                catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                echo "[DEBUG][CALIB][1] ABORTED (failFast cancel): ${fie}"
+                // catchError(buildResult: 'FAILURE', stageResult: 'ABORTED')
+                // {
+                //     error("[DEBUG][CALIB][1] cancelled")
+                // } -->not yet tried 
+                throw fie
+
+                } catch (Exception e) {
+                echo "[DEBUG][CALIB][1] FAILED: ${e}"
+                throw e
+                }
+
+                
+            }
+        }
+    }
+}
+
+def executeSemanticCAAstree(PIPELINE_PRIORITY)
+{
+    stage ('SemanticCA Astree')
+    {
+        lock(resource: null, quantity: 1, label: 'AMG-HPEDU-ASTREE', priority: PIPELINE_PRIORITY)
+        {
+            node('AMG-HPEDU-ASTREE')
+            {
+                // jenkinsOps.printAgentWSInfo()
+                // processSemanticCA(STAGE_NAME, PIPELINE_PRIORITY)
+                // postASTREESemanticCA(STAGE_NAME)
+                try
+                {
+                    jenkinsOps.printAgentWSInfo()
+                    processSemanticCA(STAGE_NAME, PIPELINE_PRIORITY)
+                    postASTREESemanticCA(STAGE_NAME)
+                }
+                catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                echo "[DEBUG][CALIB][2] ABORTED (failFast cancel): ${fie}"
+                // catchError(buildResult: 'FAILURE', stageResult: 'ABORTED')
+                // {
+                //     error("[DEBUG][CALIB][2] cancelled")
+                // }  --> not yet tried 
+
+                throw fie
+
+                } catch (Exception e) {
+                echo "[DEBUG][CALIB][2] FAILED: ${e}"
+                throw e
+                }
+            }
+        }
+    }
+}
+
+
 if (params.TRACE32_OTTTEST || isimportantbranch_or_Release() || isScheduledRC())
 {
     TRACE32['Trace32 OTT test'] =
